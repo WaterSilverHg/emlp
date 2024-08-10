@@ -326,14 +326,14 @@ void GameWidget::useQTools(QTool * t_tool)
         return;
     }
     message = (t_tool->who?"你":"对面");
-    if(typeid(t_tool).hash_code() == typeid(QToolBeer).hash_code()){
+    if(t_tool->text() == "啤酒"){
         if(bullets.isEmpty())return;
         bool b = bullets.back();
         bullets.pop_back();
-        QMessageBox::information(this,"提示","经过此处");
-        message += QString("使用了香烟，退掉了一颗") + (b?"实弹":"虚弹");
+        //QMessageBox::information(this,"提示","经过此处");
+        message += QString("使用了啤酒，退掉了一颗") + (b?"实弹":"虚弹");
     }
-    else if(typeid(t_tool).hash_code() == typeid(QToolCigarette).hash_code()){
+    else if(t_tool->text() == "香烟"){
         if(t_tool->who == 1){
             if(p1.blood >= player_s::blood)return;//如果满血，不用
             p1.blood++;
@@ -350,14 +350,14 @@ void GameWidget::useQTools(QTool * t_tool)
     else if(typeid(t_tool).hash_code() == typeid(QToolEpinephrine).hash_code()){
         return;//未启用
     }
-    else if(typeid(&t_tool).hash_code() == typeid(QToolGlass).hash_code()){
+    else if(t_tool->text() == "放大镜"){
         if(bullets.isEmpty())return;
         message += "使用了放大镜";
         if(t_tool->who){
             message+="下一颗子弹是" + QString(bullets.back()?"实弹":"虚弹");
         }
     }
-    else if(typeid(t_tool).hash_code() == typeid(QToolHandcuffs).hash_code()){
+    else if(t_tool->text() == "手铐"){
         if(t_tool->who){
             p2.handcuffed = 2;
         }
@@ -372,7 +372,7 @@ void GameWidget::useQTools(QTool * t_tool)
     else if(typeid(t_tool).hash_code() == typeid(QToolReverser).hash_code()){
         return;//未开发
     }
-    else if(typeid(t_tool).hash_code() == typeid(QToolSaw).hash_code()){
+    else if(t_tool->text() == "锯子"){
         if(t_tool->who){
             if(p1.nexthurt == 1){
                 p1.nexthurt = 2;
@@ -385,7 +385,7 @@ void GameWidget::useQTools(QTool * t_tool)
             }
             else return;
         }
-        message += "使用了手锯，下次开枪造成的伤害+1";
+        message += "使用了锯子，下次开枪造成的伤害+1";
     }
     else if(typeid(t_tool).hash_code() == typeid(QTool).hash_code()){
         QMessageBox::information(this,"提示","空道具");
