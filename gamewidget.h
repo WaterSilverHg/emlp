@@ -36,6 +36,8 @@ private:
     QTcpServer* tcpserver;
     QTcpSocket* tcpsocket;
 
+    bool isServer = 0;
+
     void startGame();//游戏开始，负责初始化
     void initSocket();
     void initPlayer();//初始化玩家属性
@@ -49,6 +51,7 @@ private:
     void useQGun(const QString& = QString());
     void showMessage();
     void showBlood();
+    void gameover();
     void showWin();
     void showDead();
     void dealDatagram();

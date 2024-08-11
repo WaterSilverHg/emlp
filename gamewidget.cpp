@@ -7,8 +7,29 @@ GameWidget::GameWidget(QWidget *parent)
 {
     ui->setupUi(this);
 
-    tcpsocket = nullptr;
-    tcpserver = nullptr;
+    tcpsocket = new QTcpSocket(this);
+    tcpserver = new QTcpServer(this);
+    //服务器信号
+    connect(tcpserver,&QTcpServer::newConnection,[this](){
+        if(tcpsocket && tcpsocket->isOpen()){
+            QTcpSocket* socket = tcpserver->nextPendingConnection();
+            socket->close();
+            return;
+        }
+        tcpsocket = tcpserver->nextPendingConnection();
+        //QMessageBox::information(this,"提示","连接成功");
+        ui->stackedWidget->setCurrentIndex(page_s::GAME);
+        startGame();
+    });
+    //客户端信号
+    connect(tcpsocket,&QTcpSocket::connected,[this](){
+        //QMessageBox::information(this,"提示","连接成功");
+        ui->stackedWidget->setCurrentIndex(page_s::GAME);
+        startGame();
+    });
+    connect(tcpsocket,&QTcpSocket::errorOccurred,[this](){
+        QMessageBox::information(this,"提示","连接失败");
+    });
 
     connect(ui->login_PB,&QPushButton::clicked,[this](){//输入昵称
         p1.username = ui->login_LE->text();
@@ -19,53 +40,25 @@ GameWidget::GameWidget(QWidget *parent)
         ui->stackedWidget->setCurrentIndex(page_s::SELECT);
     });
     connect(ui->s_server_PB,&QPushButton::clicked,[this](){//被动连接
-        tcpserver = new QTcpServer(this);
+        tcpsocket->close();
+        isServer = 1;
         tcpserver->listen(QHostAddress::Any,server_s::PORT);
-        connect(tcpserver,&QTcpServer::newConnection,[this](){
-            if(tcpsocket != nullptr){
-                tcpsocket->close();
-                delete tcpsocket;
-                tcpsocket = nullptr;
-            }
-            tcpsocket = tcpserver->nextPendingConnection();
-            //QMessageBox::information(this,"提示","连接成功");
-            ui->stackedWidget->setCurrentIndex(page_s::GAME);
-            startGame();
-        });
         ui->stackedWidget->setCurrentIndex(page_s::SERVER);
     });
     connect(ui->serverRe_PB,&QPushButton::clicked,[this](){
-        if(tcpserver != nullptr){
-            tcpserver->close();
-            delete tcpserver;
-            tcpserver = nullptr;
-        }
+        tcpserver->close();
         ui->stackedWidget->setCurrentIndex(page_s::SELECT);
     });
     connect(ui->s_client_PB,&QPushButton::clicked,[this](){//主动连接
-        if(tcpsocket != nullptr){
-            tcpsocket->close();
-        }
-        else tcpsocket = new QTcpSocket(this);
+        isServer = 0;
+        tcpsocket->close();
         ui->stackedWidget->setCurrentIndex(page_s::CLIENT);
     });
     connect(ui->client_PB,&QPushButton::clicked,[this](){//发起连接
         tcpsocket->connectToHost(QHostAddress(ui->client_LE->text()),server_s::PORT);
-        connect(tcpsocket,&QTcpSocket::connected,[this](){
-            //QMessageBox::information(this,"提示","连接成功");
-            ui->stackedWidget->setCurrentIndex(page_s::GAME);
-            startGame();
-        });
-        connect(tcpsocket,&QTcpSocket::errorOccurred,[this](){
-            QMessageBox::information(this,"提示","连接失败");
-        });
     });
     connect(ui->clientRe_PB,&QPushButton::clicked,[this](){
-        if(tcpsocket != nullptr){
-            tcpsocket->close();
-            delete tcpsocket;
-            tcpsocket = nullptr;
-        }
+        tcpsocket->close();
         ui->stackedWidget->setCurrentIndex(page_s::SELECT);
     });
     connect(ui->shootp1_PB,&QPushButton::clicked,[this](){
@@ -73,6 +66,10 @@ GameWidget::GameWidget(QWidget *parent)
     });
     connect(ui->shootp2_PB,&QPushButton::clicked,[this](){
         shoot("0");
+    });
+    connect(ui->return_PB,&QPushButton::clicked,[this](){
+        tcpsocket->close();
+        ui->stackedWidget->setCurrentIndex(page_s::SELECT);
     });
 }
 
@@ -83,11 +80,6 @@ GameWidget::~GameWidget()
         delete tcpserver;
         tcpserver = nullptr;
     };
-    if(tcpsocket != nullptr){
-        tcpsocket->close();
-        delete tcpsocket;
-        tcpsocket = nullptr;
-    }
     delete ui;
 }
 
@@ -96,7 +88,8 @@ void GameWidget::startGame()
     initSocket();
     initPlayer();
     setQToolspool();
-    if(tcpserver){
+    ui->messagebox->clear();
+    if(isServer){
         chooseFirst();
         setBullets();//makeQTools放到了里面
         //tcpserver->close();
@@ -114,14 +107,14 @@ void GameWidget::initSocket()
     });
     connect(tcpsocket,&QTcpSocket::disconnected,[this](){
         QMessageBox::information(this,"提示","对方断开连接");
-        if(tcpserver != nullptr){
+        /*if(tcpserver != nullptr){
             tcpserver->close();
             delete tcpserver;
             tcpserver = nullptr;
-        }
+        }*/
         ui->stackedWidget->setCurrentIndex(page_s::SELECT);
     });
-    _sleep(100);
+    //_sleep(100);
     tcpsocket->write((operation_s::sendname + p1.username + '|').toUtf8());
 }
 
@@ -178,10 +171,11 @@ void GameWidget::setBullets(const QString &content)
         bullets.clear();
         bullets.resize(num);
         t_b = num/2;//实弹的数量
-        for(int i = 0;i<t_b;++i){
+        for(int i = 0;i<t_b;){
             int index = random->bounded(num);
             if(!bullets[index]){
                 bullets[index] = true;
+                ++i;
             }
         }
         QString newop = operation_s::setbullets + QString::number(num);
@@ -358,10 +352,10 @@ void GameWidget::useQTools(QTool * t_tool)
         }
     }
     else if(t_tool->text() == "手铐"){
-        if(t_tool->who){
+        if(t_tool->who && p2.handcuffed > 0){
             p2.handcuffed = 2;
         }
-        else{
+        else if(p1.handcuffed > 0){
             p1.handcuffed = 2;
         }
         message += "使用了手铐，" + QString(t_tool->who?"对面":"你") + "无法行动一次";
@@ -403,6 +397,9 @@ void GameWidget::useQTools(QTool * t_tool)
     }
     if(round) tcpsocket->write((operation_s::useqtool + QString::number(t_tool->who?0:1) + QString::number(t_tool->index)).toUtf8());
     delete t_tool;
+    if(round && bullets.isEmpty()){
+        setBullets();
+    }
     showMessage();
 }
 
@@ -439,11 +436,11 @@ void GameWidget::useQGun(const QString & content)
         }
         if(b){
             message+="是实弹，造成了" + QString::number(p1.nexthurt) + "点伤害";
-            if(p2.handcuffed == 2)round = 1;
         }
         else{
             message+="是虚弹";
         }
+        if(p2.handcuffed == 2)round = 1;
         p1.nexthurt = 1;
         if(p2.handcuffed>0)p2.handcuffed--;
     }
@@ -469,35 +466,52 @@ void GameWidget::useQGun(const QString & content)
         }
         else{
             message+="是虚弹";
-            if(p1.handcuffed == 2)round = 0;
         }
+        if(p1.handcuffed == 2)round = 0;
         p2.nexthurt = 1;
         if(p1.handcuffed>0)p1.handcuffed--;
     }
     if(round){
+        message+="\n轮到我方开枪";
         ui->shootp1_PB->setEnabled(true);
         ui->shootp2_PB->setEnabled(true);
     }
     else{
+        message+="\n轮到对面开枪";
         ui->shootp1_PB->setEnabled(false);
         ui->shootp2_PB->setEnabled(false);
     }
     showMessage();
+
+    if(p1.blood <=0 ){
+        ui->stackedWidget->setCurrentIndex(page_s::OVER);
+        ui->overtext->setText("你输了");
+        return;
+    }
+    if(p2.blood <=0 ){
+        ui->stackedWidget->setCurrentIndex(page_s::OVER);
+        ui->overtext->setText("你赢了");
+        return;
+    }
+
     if(round && bullets.isEmpty()){
         setBullets();
-        makeQTools();
     }
+
 }
 
 void GameWidget::showMessage()
 {
-    ui->messagebox->insertHtml(QString::number(round) + "<p>" + message + "<p/><dr/>");
+    ui->messagebox->append("<p>" + message + "<p/><dr/>");
     showBlood();
 }
 
 void GameWidget::showBlood()
 {
-    ui->bloodbox->setHtml("你的血量：" + QString::number(p1.blood) + "| 对面血量：" + QString::number(p2.blood));
+    ui->bloodbox->setHtml("<p>      你的血量：" + QString::number(p1.blood) + "  |   对面血量：" + QString::number(p2.blood)+"<p/>");
+    /*QString tmp;
+    for(auto i : bullets){tmp+=QString::number(i);}
+    ui->bloodbox->append(tmp);*/
 }
 
 void GameWidget::dealDatagram()

@@ -10,6 +10,7 @@ inline const int SELECT = 1;
 inline const int SERVER = 2;
 inline const int CLIENT = 3;
 inline const int GAME = 4;
+inline const int OVER = 5;
 }
 
 namespace server_s{
